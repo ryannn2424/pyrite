@@ -110,8 +110,16 @@ class MediaWriter:
 
     def _write_image_linux(self):
         with open(self._device_path, 'wb') as device:
+            _index = 0
             for chunk in self._chunk_list:
+                _index += 1
+                print(f'{int(_index / len(self._chunk_list) * 100)}%')
+
                 device.write(chunk)
+
+            print('Flushing device...')
+            device.flush()
+            os.fsync(device.fileno())
 
         print('Image written successfully!')
 

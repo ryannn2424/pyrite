@@ -28,7 +28,7 @@ class ImageReader:
         with open(self.image_path, 'rb') as file:
             chunk_list = []
             while True:
-                chunk = file.read(1024)
+                chunk = bytes(file.read(1024))
                 if not chunk:
                     break
                 chunk_list.append(chunk)
