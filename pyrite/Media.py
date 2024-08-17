@@ -1,32 +1,33 @@
 import os
 
 
+def _detect_os() -> str:
+    _os_scan = os.uname()
+    _os_type = _os_scan.sysname
+
+    match _os_type:
+        case 'Linux':
+            return 'Linux'
+        case 'Windows':
+            return 'Windows'
+        case 'Darwin':
+            return 'macOS'
+        case _:
+            # Library only supports Windows, Linux, and macOS for now.
+            raise ValueError('Unsupported OS')
+
+
 class MediaFinder:
     def __init__(self,
                  os_type: str | None = None
                  ) -> None:
 
         if os_type is None:
-            self.os_type = self._detect_os()
+            self.os_type = _detect_os()
         elif os_type not in ['Linux', 'Windows', 'macOS']:
             raise ValueError('Unsupported OS')
         else:
             self.os_type = os_type
-
-    def _detect_os(self) -> str:
-        _os_scan = os.uname()
-        _os_type = _os_scan.sysname
-
-        match _os_type:
-            case 'Linux':
-                return 'Linux'
-            case 'Windows':
-                return 'Windows'
-            case 'Darwin':
-                return 'macOS'
-            case _:
-                # Library only supports Windows, Linux, and macOS for now.
-                raise ValueError('Unsupported OS')
 
     def _find_linux_media_devices(self) -> dict:
         _sorted_devices: dict = {  # This dictionary attempts to distinguish removable devices from system drives.
@@ -79,3 +80,40 @@ class MediaFinder:
             return _device_dict['r'] + _device_dict['nr']
         else:
             return _device_dict['r']
+
+
+class MediaWriter:
+    def __init__(self,
+                 device_path: str,
+                 chunk_list: bytes,
+                 os_type: str | None = None
+                 ) -> None:
+
+        self._chunk_list = chunk_list
+        self._device_path = device_path
+
+        if os_type is None:
+            self._os_type = _detect_os()
+        elif os_type not in ['Linux', 'Windows', 'macOS']:
+            raise ValueError('Unsupported OS')
+        else:
+            self._os_type = os_type
+
+    def write_image(self):
+        match self._os_type:
+            case 'Linux':
+                self._write_image_linux()
+            case 'Windows':
+                pass
+            case 'macOS':
+                pass
+
+    def _write_image_linux(self):
+        with open(self._device_path, 'wb') as device:
+            for chunk in self._chunk_list:
+                device.write(chunk)
+
+        print('Image written successfully!')
+
+
+

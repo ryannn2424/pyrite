@@ -13,7 +13,7 @@ class ImageReader:
         if check_extension:  # Can be skipped by setting check_extension to False
             self._verify_file_extension()
 
-        self.image_bytes = self._read_image()
+        self.chunk_list = self._read_image()
 
     def _check_if_exists(self):
         if not os.path.exists(self.image_path):
@@ -26,4 +26,11 @@ class ImageReader:
 
     def _read_image(self):
         with open(self.image_path, 'rb') as file:
-            return file.read()
+            chunk_list = []
+            while True:
+                chunk = file.read(1024)
+                if not chunk:
+                    break
+                chunk_list.append(chunk)
+
+            return chunk_list
