@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "pyrite"
+version = "0.1.0"
+description = "A Python library for reading Disk Images and flashing drives.4"
+authors = ["Ryan Ray"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
