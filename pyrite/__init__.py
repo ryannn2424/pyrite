@@ -1,2 +1,2 @@
+from .Media import MediaWriter, MediaFinder
 from .ImageReader import ImageReader
-from .Media import MediaFinder, MediaWriter

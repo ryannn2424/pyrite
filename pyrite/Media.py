@@ -1,3 +1,4 @@
+from pyrite.ImageReader import ImageReader
 import os
 
 
@@ -115,11 +116,11 @@ class MediaFinder:
 class MediaWriter:
     def __init__(self,
                  device_path: str,
-                 chunk_list: bytes,
+                 image_path: str,
                  os_type: str | None = None
                  ) -> None:
 
-        self._chunk_list = chunk_list
+        self._image_path = image_path
         self._device_path = device_path
 
         if os_type is None:
@@ -140,10 +141,12 @@ class MediaWriter:
 
     def _write_image_linux(self):
         with open(self._device_path, 'wb') as device:
+            ir = ImageReader(self._image_path, check_extension=True)
             _index = 0
-            for chunk in self._chunk_list:
+            
+            for chunk in ir.read_image():
                 _index += 1
-                print(f'{int(_index / len(self._chunk_list) * 100)}%')
+                print(f'{int(_index / ir._amount_of_chunks * 100)}%')
 
                 device.write(chunk)
 
@@ -153,28 +156,112 @@ class MediaWriter:
 
         print('Image written successfully!')
         
+    def _windows_wipe_device(self):
+        import subprocess
+        import re
+        
+        # Holy crud
+        
+        def find_drive_index():        
+            try: 
+                result = subprocess.run(
+                    ['wmic', 'diskdrive', 'get', 'DeviceID,Index'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                if result.returncode != 0:
+                    print(f"Error retrieving disk information: {result.stderr}")
+                    return None
+                
+                for line in result.stdout.splitlines():
+                    if self._device_path in line:
+                        foundMatch = re.search(r'(\d+)', line)
+                        if foundMatch:
+                            return int(foundMatch.group(1))
+                        
+                print(f"Device not found: {self._device_path}")
+                return None
+            
+            except Exception as e:
+                print(f"An error occurred while fetching the disk number: {e}")
+                return None
+            
+        drive_index = find_drive_index()
+        if drive_index is None:
+            print("Unable to find the drive index.")
+            return
+        
+        diskpart_script = f"""
+        select disk {drive_index}
+        clean
+        """
+
+        # Run the diskpart script
+        try:
+            process = subprocess.run(
+                ['diskpart'], 
+                input=diskpart_script, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE, 
+                text=True
+            )
+
+            # Check for errors
+            if process.returncode == 0:
+                print(f"All partitions on disk {drive_index} (DeviceID: {self._device_path}) have been deleted successfully.")
+            else:
+                print(f"Error deleting partitions on disk {drive_index}:\n{process.stderr}")
+        
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        
     def _write_image_windows(self):
         import win32file
         import win32con
+        import pywintypes
+        import time
+                
+        # Calling this function will requitre the user to have admin privileges, so take account of that.
         
-        _device_handle = win32file.CreateFile(
-            self._device_path,
-            win32con.GENERIC_WRITE,
-            0,
-            None,
-            win32con.OPEN_EXISTING,
-            0,
-            None
-        )
+        self._windows_wipe_device()  # Wiping the device with diskpart before otherwise windows throws a fit
         
+        
+        def open_handle():
+            return win32file.CreateFile(
+                self._device_path,
+                win32con.GENERIC_WRITE,
+                0,
+                None,
+                win32con.OPEN_EXISTING,
+                0,
+                None
+            )   
+            
+        _device_handle = open_handle()     
+
         try:
+            ir = ImageReader(image_path=self._image_path, check_extension=True)
             _index = 0
-            for chunk in self._chunk_list:
+            for chunk in ir.read_image():
                 _index += 1
-                print(f'{int(_index / len(self._chunk_list) * 100)}%')
-                
-                win32file.WriteFile(_device_handle, chunk)
-                
+                print(f'{int(_index / ir._amount_of_chunks * 100)}% written', end='\r')
+
+                try:
+                    win32file.WriteFile(_device_handle, chunk)
+                    win32file.FlushFileBuffers(_device_handle)
+                except pywintypes.error as e:
+                    if e.winerror == 5:  # Access is denied
+                        print(f'Error writing chunk {_index}: {e.strerror}')
+                        break
+                    elif e.winerror == 433:
+                        print('Device disconnected. Reconnecting...')
+                        win32file.CloseHandle(_device_handle)
+                        time.sleep(1)
+                        _device_handle = open_handle()
+                    else:
+                        raise e
+
             print('Image written successfully!')
         finally:
             win32file.CloseHandle(_device_handle)
