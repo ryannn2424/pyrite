@@ -2,8 +2,16 @@ import os
 
 
 def _detect_os() -> str:
-    _os_scan = os.uname()
-    _os_type = _os_scan.sysname
+    try:
+        _os_scan = os.uname()
+        _os_type = _os_scan.sysname
+    except:
+        try:  # I'm putting the import here to reduce import times as much as possible & use as little imports as I can.
+            import platform
+            _os_scan = platform.uname()
+            _os_type = _os_scan.system
+        except:
+            raise ValueError('Unable to detect OS. Use the os_type parameter to specify the OS.')
 
     match _os_type:
         case 'Linux':
@@ -45,11 +53,31 @@ class MediaFinder:
                 _sorted_devices['nr'].append(f"/dev/{device}")
 
         return _sorted_devices
-
+    
 
     def _find_windows_media_devices(self) -> list:
-        pass  # Will be added later
+        removable_drivers = []
 
+        # Get all physical drives
+        drives_info = list(filter(None, os.popen('wmic diskdrive get DeviceID,MediaType').read().strip().split('\n')[1:]))
+        print(drives_info)
+
+        for drive_info in drives_info:
+            drive_info = drive_info.strip()
+            drive_info = drive_info.replace('  ', ' ')
+            print(drive_info)
+            
+            if drive_info:
+                print(drive_info.split(' '))
+                try:
+                    device_id, media_type, _ = drive_info.split(' ')
+                except:
+                    device_id, media_type, _, _, _ = drive_info.split(' ')
+                # Filter out system drives (assuming system drives are not removable)
+                if media_type == 'Removable':
+                    removable_drivers.append(device_id)
+
+        return removable_drivers
 
     def _find_macos_media_devices(self) -> list:
         pass  # Will be added later
@@ -71,15 +99,17 @@ class MediaFinder:
         match self.os_type:
             case 'Linux':
                 _device_dict = self._find_linux_media_devices()
-            case 'Windows':
+                
+                if show_all:
+                    return _device_dict['r'] + _device_dict['nr']
+                else:
+                    return _device_dict['r']
+                
+            case 'Windows':  # This returns the device ID, not the device name.
                 return self._find_windows_media_devices()
             case 'macOS':
                 return self._find_macos_media_devices()
 
-        if show_all:
-            return _device_dict['r'] + _device_dict['nr']
-        else:
-            return _device_dict['r']
 
 
 class MediaWriter:
@@ -104,7 +134,7 @@ class MediaWriter:
             case 'Linux':
                 self._write_image_linux()
             case 'Windows':
-                pass
+                self._write_image_windows()
             case 'macOS':
                 pass
 
@@ -122,6 +152,30 @@ class MediaWriter:
             os.fsync(device.fileno())
 
         print('Image written successfully!')
-
-
-
+        
+    def _write_image_windows(self):
+        import win32file
+        import win32con
+        
+        _device_handle = win32file.CreateFile(
+            self._device_path,
+            win32con.GENERIC_WRITE,
+            0,
+            None,
+            win32con.OPEN_EXISTING,
+            0,
+            None
+        )
+        
+        try:
+            _index = 0
+            for chunk in self._chunk_list:
+                _index += 1
+                print(f'{int(_index / len(self._chunk_list) * 100)}%')
+                
+                win32file.WriteFile(_device_handle, chunk)
+                
+            print('Image written successfully!')
+        finally:
+            win32file.CloseHandle(_device_handle)
+            
