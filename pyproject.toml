@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "pyrite"
 version = "0.1.0"
-description = "A Python library for reading Disk Images and flashing drives.4"
+description = "A Python library for reading Disk Images and flashing drives."
 authors = ["Ryan Ray"]
 readme = "README.md"
 

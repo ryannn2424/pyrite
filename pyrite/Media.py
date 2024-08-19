@@ -1,5 +1,6 @@
 from pyrite.ImageReader import ImageReader
 import logging
+import subprocess
 import os
 
 logger = logging.getLogger(__name__)
@@ -57,7 +58,6 @@ class MediaFinder:
 
         return _sorted_devices
 
-
     def _find_windows_media_devices(self) -> dict:
         _sorted_devices = {
             'r': [],  # Removable
@@ -84,9 +84,40 @@ class MediaFinder:
 
         return _sorted_devices
 
-    def _find_macos_media_devices(self) -> list:
-        pass  # Will be added later
+    def _find_macos_media_devices(self) -> dict:
+        _sorted_devices = {
+            'r': [],  # Removable
+            'nr': []  # Non-removable
+        }
 
+        try:
+            scan_results = subprocess.run(['diskutil', 'list'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if scan_results.returncode != 0:
+                logger.error(f"An error occurred while scanning for devices: {scan_results.stderr}")
+
+            for line in scan_results.stdout.splitlines():
+                if '/dev/disk' in line:
+                    device = line.split()[0]
+                    info_results = subprocess.run(['diskutil', 'info', device], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    trimmed_info_results = info_results.stdout.replace(' ','')
+
+                    if info_results.returncode != 0:
+                        logger.error(f"An error occurred while fetching device information: {info_results.stderr}")
+
+                    if 'Protocol:DiskImage' not in trimmed_info_results:
+                        device_name = 'NNF'  # No Name Found
+                        for device_specific_line in trimmed_info_results.splitlines():
+                            if 'Device/MediaName:' in device_specific_line:
+                                device_name = device_specific_line.split('Device/MediaName:')[1]
+                        if 'RemovableMedia:Removable' in trimmed_info_results:
+                            _sorted_devices['r'].append([device, device_name])
+                        else:
+                            _sorted_devices['nr'].append([device, device_name])
+
+            return _sorted_devices
+
+        except Exception as e:
+            logger.error(f"An error occurred while scanning for devices: {e}")
 
     def find_media_devices(self,
                            show_all: bool = False
@@ -96,18 +127,15 @@ class MediaFinder:
         match self.os_type:
             case 'Linux':
                 _device_dict = self._find_linux_media_devices()
-
-                if show_all:
-                    return _device_dict['r'] + _device_dict['nr']
-                else:
-                    return _device_dict['r']
-
             case 'Windows':  # This returns the device ID, not the device name.
-                return self._find_windows_media_devices()
+                _device_dict = self._find_windows_media_devices()
             case 'macOS':
-                return self._find_macos_media_devices()
+                _device_dict = self._find_macos_media_devices()
 
-
+        if show_all:
+            return _device_dict['r'] + _device_dict['nr']
+        else:
+            return _device_dict['r']
 
 class MediaWriter:
     def __init__(self,
@@ -134,10 +162,9 @@ class MediaWriter:
             case 'Windows':
                 self._write_image_windows()
             case 'macOS':
-                pass
+                self._write_image_macos()
 
     def _linux_wipe_device(self):
-        import subprocess
         # We simply use sfdisk to delete the partition table. Most systems ship with fdisk installed, so we're assuming it's installed.
 
         logger.info('Wiping device with dd (Linux)')
@@ -174,7 +201,6 @@ class MediaWriter:
         logger.info(f'Image written successfully to {self._device_path}')
 
     def _windows_wipe_device(self):
-        import subprocess
         import re
 
         # Holy crud
@@ -282,3 +308,38 @@ class MediaWriter:
             logger.info('Image written successfully!')
         finally:
             win32file.CloseHandle(_device_handle)
+
+    def _macos_wipe_device(self):
+        wipe_command = ['diskutil', 'eraseDisk', '-noEFI', 'FREE', 'GPT', self._device_path]
+
+        wipe_results = subprocess.run(wipe_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        try:
+
+            if wipe_results.returncode != 0:
+                logger.error(f"An error occurred while wiping the device: {wipe_results.stderr}")
+            else:
+                logger.info(f"Device {self._device_path} wiped successfully.")
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {e}")
+
+    def _write_image_macos(self):
+        self._macos_wipe_device()
+
+        logger.debug('Attempting to write image to device (macOS)')
+        with open(self._device_path, 'wb') as device:
+            ir = ImageReader(self._image_path, check_extension=True)
+            _index = 0
+
+            for chunk in ir.read_image():
+                _index += 1
+                self.write_progress_percent = int(_index / ir._amount_of_chunks * 100)
+                print(f'{self.write_progress_percent}%', end='\r')
+
+                device.write(chunk)
+
+            logger.debug('Flushing device...')
+            device.flush()
+            os.fsync(device.fileno())
+

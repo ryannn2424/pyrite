@@ -6,9 +6,14 @@ class ImageReader:
     def __init__(self,
                  image_path: str,
                  check_extension: bool = True,
-                 chunk_size: int = 32768
+                 chunk_size: int = 32768,
+                 _supported_image_formats: list[str] | None =None
                  ) -> None:
 
+        if _supported_image_formats is None:
+            self._supported_image_formats = ['iso', 'img']
+        else:
+            self._supported_image_formats = _supported_image_formats
         self.image_path = image_path
         self._check_if_exists()
         self._chunk_size = chunk_size
@@ -22,8 +27,7 @@ class ImageReader:
             raise FileNotFoundError('File not found')
 
     def _verify_file_extension(self):
-        _valid_extensions: list[str] = ['iso', 'img']
-        if self.image_path.split('.')[-1] not in _valid_extensions:
+        if self.image_path.split('.')[-1] not in self._supported_image_formats:
             raise ValueError('Invalid file extension')
         
     def _calculate_chunk_amount(self):
