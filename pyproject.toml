@@ -1,9 +1,12 @@
 [tool.poetry]
 name = "pyrite"
 version = "0.1.0"
+package-mode = true
 description = "A Python library for reading Disk Images and flashing drives."
-authors = ["Ryan Ray"]
+authors = ["Ryan Ray <ryanray25@hotmail.com>"]
 readme = "README.md"
+homepage = "https://github.com/ryannn2424/pyrite"
+license = 'CC-BY-4.0'
 
 [tool.poetry.dependencies]
 python = "^3.12"

@@ -7,13 +7,13 @@ class ImageReader:
                  image_path: str,
                  check_extension: bool = True,
                  chunk_size: int = 32768,
-                 _supported_image_formats: list[str] | None =None
+                 supported_image_formats: list[str] | None =None
                  ) -> None:
 
-        if _supported_image_formats is None:
+        if supported_image_formats is None:
             self._supported_image_formats = ['iso', 'img']
         else:
-            self._supported_image_formats = _supported_image_formats
+            self._supported_image_formats = supported_image_formats
         self.image_path = image_path
         self._check_if_exists()
         self._chunk_size = chunk_size
@@ -31,10 +31,10 @@ class ImageReader:
             raise ValueError('Invalid file extension')
         
     def _calculate_chunk_amount(self):
-        _file_size = os.path.getsize(self.image_path)
-        _num_chunks = math.ceil(_file_size / self._chunk_size)
-        self._amount_of_chunks = _num_chunks
-        return _num_chunks
+        file_size = os.path.getsize(self.image_path)
+        num_chunks = math.ceil(file_size / self._chunk_size)
+        self._amount_of_chunks = num_chunks
+        return num_chunks
 
     def read_image(self):  # Old function is incredibly memory inefficient sooo
         self._calculate_chunk_amount()

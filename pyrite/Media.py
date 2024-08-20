@@ -7,17 +7,17 @@ logger = logging.getLogger(__name__)
 
 def _detect_os() -> str:
     try:
-        _os_scan = os.uname()
-        _os_type = _os_scan.sysname
+        os_scan = os.uname()
+        os_type = os_scan.sysname
     except:
         try:  # I'm putting the import here to reduce import times as much as possible & use as little imports as I can.
             import platform
-            _os_scan = platform.uname()
-            _os_type = _os_scan.system
+            os_scan = platform.uname()
+            os_type = os_scan.system
         except:
             raise ValueError('Unable to detect OS. Use the os_type parameter to specify the OS.')
 
-    match _os_type:
+    match os_type:
         case 'Linux':
             return 'Linux'
         case 'Windows':
@@ -42,24 +42,31 @@ class MediaFinder:
             self.os_type = os_type
 
     def _find_linux_media_devices(self) -> dict:
-        _sorted_devices: dict = {  # This dictionary attempts to distinguish removable devices from system drives.
+        sorted_devices: dict = {  # This dictionary attempts to distinguish removable devices from system drives.
             'r': [],  # Removable
             'nr': []  # Non-removable
         }
 
-        _devices: list[str] = os.listdir('/sys/block')
+        devices: list[str] = os.listdir('/sys/block')
 
-        for device in _devices:
-            _removable_status = open(f'/sys/block/{device}/removable', 'r').read().replace('\n', '')
-            if bool(int(_removable_status)):
-                _sorted_devices['r'].append(f"/dev/{device}")
+        for device in devices:
+            removable_status = open(f'/sys/block/{device}/removable', 'r').read().replace('\n', '')
+            device_name = "NNF"
+
+            try:
+                device_name = open(f'/sys/block/{device}/device/model', 'r').read().replace('\n', '').strip()
+            except Exception as e:
+                logger.error(f"Unable to read device name for {device}: {e}")
+
+            if bool(int(removable_status)):
+                sorted_devices['r'].append((f"/dev/{device}", device_name))
             else:
-                _sorted_devices['nr'].append(f"/dev/{device}")
+                sorted_devices['nr'].append((f"/dev/{device}", device_name))
 
-        return _sorted_devices
+        return sorted_devices
 
     def _find_windows_media_devices(self) -> dict:
-        _sorted_devices = {
+        sorted_devices = {
             'r': [],  # Removable
             'nr': []  # Non-removable
         }
@@ -78,14 +85,14 @@ class MediaFinder:
                     device_id, media_type, _, _, _ = drive_info.split(' ')
                 # Filter out system drives (assuming system drives are not removable)
                 if media_type == 'Removable':
-                    _sorted_devices['r'].append(device_id)
+                    sorted_devices['r'].append(device_id)
                 else:
-                    _sorted_devices['nr'].append(device_id)
+                    sorted_devices['nr'].append(device_id)
 
-        return _sorted_devices
+        return sorted_devices
 
     def _find_macos_media_devices(self) -> dict:
-        _sorted_devices = {
+        sorted_devices = {
             'r': [],  # Removable
             'nr': []  # Non-removable
         }
@@ -110,11 +117,11 @@ class MediaFinder:
                             if 'Device/MediaName:' in device_specific_line:
                                 device_name = device_specific_line.split('Device/MediaName:')[1]
                         if 'RemovableMedia:Removable' in trimmed_info_results:
-                            _sorted_devices['r'].append([device, device_name])
+                            sorted_devices['r'].append([device, device_name])
                         else:
-                            _sorted_devices['nr'].append([device, device_name])
+                            sorted_devices['nr'].append([device, device_name])
 
-            return _sorted_devices
+            return sorted_devices
 
         except Exception as e:
             logger.error(f"An error occurred while scanning for devices: {e}")
@@ -122,20 +129,20 @@ class MediaFinder:
     def find_media_devices(self,
                            show_all: bool = False
                            ) -> list:
-        _device_dict: dict = {}
+        device_dict: dict = {}
 
         match self.os_type:
             case 'Linux':
-                _device_dict = self._find_linux_media_devices()
+                device_dict = self._find_linux_media_devices()
             case 'Windows':  # This returns the device ID, not the device name.
-                _device_dict = self._find_windows_media_devices()
+                device_dict = self._find_windows_media_devices()
             case 'macOS':
-                _device_dict = self._find_macos_media_devices()
+                device_dict = self._find_macos_media_devices()
 
         if show_all:
-            return _device_dict['r'] + _device_dict['nr']
+            return device_dict['r'] + device_dict['nr']
         else:
-            return _device_dict['r']
+            return device_dict['r']
 
 class MediaWriter:
     def __init__(self,
@@ -167,7 +174,7 @@ class MediaWriter:
     def _linux_wipe_device(self):
         # We simply use sfdisk to delete the partition table. Most systems ship with fdisk installed, so we're assuming it's installed.
 
-        logger.info('Wiping device with dd (Linux)')
+        logger.info('Wiping device with sfdisk (Linux)')
 
         try:
             wipe_command = ['sfdisk', '--delete', self._device_path]  # We're also assuming fdisk is installed.
@@ -185,12 +192,12 @@ class MediaWriter:
         logger.debug('Attempting to write image to device (Linux)')
         with open(self._device_path, 'wb') as device:
             ir = ImageReader(self._image_path, check_extension=True)
-            _index = 0
+            index = 0
 
             for chunk in ir.read_image():
-                _index += 1
+                index += 1
                 # print(f'{int(_index / ir._amount_of_chunks * 100)}%', end='\r')
-                self.write_progress_percent = int(_index / ir._amount_of_chunks * 100)
+                self.write_progress_percent = int(index / ir._amount_of_chunks * 100)
 
                 device.write(chunk)
 
@@ -241,7 +248,6 @@ class MediaWriter:
         clean
         """
 
-        # Run the diskpart script
         try:
             process = subprocess.run(
                 ['diskpart'],
@@ -251,7 +257,6 @@ class MediaWriter:
                 text=True
             )
 
-            # Check for errors
             if process.returncode == 0:
                 logger.debug(f"All partitions on disk {drive_index} (DeviceID: {self._device_path}) have been deleted successfully.")
             else:
@@ -280,34 +285,34 @@ class MediaWriter:
                 None
             )
 
-        _device_handle = open_handle()
+        device_handle = open_handle()
 
         try:
             ir = ImageReader(image_path=self._image_path, check_extension=True)
-            _index = 0
+            index = 0
             for chunk in ir.read_image():
-                _index += 1
+                index += 1
                 # print(f'{int(_index / ir._amount_of_chunks * 100)}% written', end='\r')
-                self.write_progress_percent = int(_index / ir._amount_of_chunks * 100)
+                self.write_progress_percent = int(index / ir._amount_of_chunks * 100)
 
                 try:
-                    win32file.WriteFile(_device_handle, chunk)
-                    win32file.FlushFileBuffers(_device_handle)
+                    win32file.WriteFile(device_handle, chunk)
+                    win32file.FlushFileBuffers(device_handle)
                 except pywintypes.error as e:
                     if e.winerror == 5:  # Access is denied error
-                        logger.error(f'Access denied when writing chunk {_index}: {e.strerror}')
+                        logger.error(f'Access denied when writing chunk {index}: {e.strerror}')
                         break
                     elif e.winerror == 433:  # This error occurs when the device is disconnected. We can try to reconnect by opening another handle.
                         logger.debug('Device disconnected. Reconnecting...')
-                        win32file.CloseHandle(_device_handle)
+                        win32file.CloseHandle(device_handle)
                         time.sleep(1)
-                        _device_handle = open_handle()
+                        device_handle = open_handle()
                     else:  # Handles other fatal errors
                         raise e
 
             logger.info('Image written successfully!')
         finally:
-            win32file.CloseHandle(_device_handle)
+            win32file.CloseHandle(device_handle)
 
     def _macos_wipe_device(self):
         wipe_command = ['diskutil', 'eraseDisk', '-noEFI', 'FREE', 'GPT', self._device_path]
@@ -330,11 +335,11 @@ class MediaWriter:
         logger.debug('Attempting to write image to device (macOS)')
         with open(self._device_path, 'wb') as device:
             ir = ImageReader(self._image_path, check_extension=True)
-            _index = 0
+            index = 0
 
             for chunk in ir.read_image():
-                _index += 1
-                self.write_progress_percent = int(_index / ir._amount_of_chunks * 100)
+                index += 1
+                self.write_progress_percent = int(index / ir._amount_of_chunks * 100)
                 print(f'{self.write_progress_percent}%', end='\r')
 
                 device.write(chunk)
