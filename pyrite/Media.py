@@ -6,6 +6,9 @@ import os
 logger = logging.getLogger(__name__)
 
 def _detect_os() -> str:
+    """
+    Detects the operating system of the system.
+    """
     try:
         os_scan = os.uname()
         os_type = os_scan.sysname
@@ -30,6 +33,12 @@ def _detect_os() -> str:
 
 
 class MediaFinder:
+    """
+    Class for finding media devices on the system.
+
+    Attributes:
+        os_type (str): The operating system of the system.
+    """
     def __init__(self,
                  os_type: str | None = None
                  ) -> None:
@@ -42,6 +51,12 @@ class MediaFinder:
             self.os_type = os_type
 
     def _find_linux_media_devices(self) -> dict:
+        """
+        Finds media devices on the system. (Linux Specific)
+
+        Returns:
+            dict: A dictionary containing lists of removable and non-removable devices.
+        """
         sorted_devices: dict = {  # This dictionary attempts to distinguish removable devices from system drives.
             'r': [],  # Removable
             'nr': []  # Non-removable
@@ -66,6 +81,12 @@ class MediaFinder:
         return sorted_devices
 
     def _find_windows_media_devices(self) -> dict:
+        """
+        Finds media devices on the system. (Windows Specific)
+
+        Returns:
+            dict: A dictionary containing lists of removable and non-removable devices.
+        """
         sorted_devices = {
             'r': [],  # Removable
             'nr': []  # Non-removable
@@ -92,6 +113,13 @@ class MediaFinder:
         return sorted_devices
 
     def _find_macos_media_devices(self) -> dict:
+        """
+        ! WARNING: I do not have a real macOS machine to test this on, use at your own risk.
+        Finds media devices on the system. (macOS Specific)
+
+        Returns:
+            dict: A dictionary containing lists of removable and non-removable devices.
+        """
         sorted_devices = {
             'r': [],  # Removable
             'nr': []  # Non-removable
@@ -129,6 +157,12 @@ class MediaFinder:
     def find_media_devices(self,
                            show_all: bool = False
                            ) -> list:
+        """
+        Finds media devices on the system. Non-platform specific.
+
+        Returns:
+            list: A list of media devices.
+        """
         device_dict: dict = {}
 
         match self.os_type:
@@ -150,6 +184,14 @@ class MediaWriter:
                  image_path: str,
                  os_type: str | None = None
                  ) -> None:
+        """
+        Class for writing images to media devices.
+
+        Attributes:
+            device_path (str): The path to the device.
+            image_path (str): The path to the image.
+            os_type (str): The operating system of the system.
+        """
 
         self._image_path = image_path
         self._device_path = device_path
@@ -163,6 +205,9 @@ class MediaWriter:
             self._os_type = os_type
 
     def write_image(self):
+        """
+        Writes an image to a media device. Non-platform specific - forwards to OS specific methods.
+        """
         match self._os_type:
             case 'Linux':
                 self._write_image_linux()
@@ -173,7 +218,9 @@ class MediaWriter:
 
     def _linux_wipe_device(self):
         # We simply use sfdisk to delete the partition table. Most systems ship with fdisk installed, so we're assuming it's installed.
-
+        """
+        Wipes a device. (Linux Specific)
+        """
         logger.info('Wiping device with sfdisk (Linux)')
 
         try:
@@ -187,6 +234,9 @@ class MediaWriter:
             logger.error(f"Unexpected error: {e}")
 
     def _write_image_linux(self):
+        """
+        Writes an image to a media device. (Linux Specific)
+        """
         self._linux_wipe_device()
 
         logger.debug('Attempting to write image to device (Linux)')
@@ -208,6 +258,9 @@ class MediaWriter:
         logger.info(f'Image written successfully to {self._device_path}')
 
     def _windows_wipe_device(self):
+        """
+        Wipes a device. (Windows Specific)
+        """
         import re
 
         # Holy crud
@@ -266,6 +319,9 @@ class MediaWriter:
             logger.error(f"An error occurred: {e}")
 
     def _write_image_windows(self):
+        """
+        Writes an image to a media device. (Windows Specific)
+        """
         #  These libraries ONLY work on Windows.
         import win32file
         import win32con
@@ -315,6 +371,9 @@ class MediaWriter:
             win32file.CloseHandle(device_handle)
 
     def _macos_wipe_device(self):
+        """
+        Wipes a device. (macOS Specific)
+        """
         wipe_command = ['diskutil', 'eraseDisk', '-noEFI', 'FREE', 'GPT', self._device_path]
 
         wipe_results = subprocess.run(wipe_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -330,6 +389,9 @@ class MediaWriter:
             logger.error(f"An unexpected error occurred: {e}")
 
     def _write_image_macos(self):
+        """
+        Writes an image to a media device. (macOS Specific)
+        """
         self._macos_wipe_device()
 
         logger.debug('Attempting to write image to device (macOS)')

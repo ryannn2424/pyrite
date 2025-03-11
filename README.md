@@ -11,3 +11,24 @@ programs when necessary. Used external commands are as follows:
   - **Windows: <a href='https://docs.microsoft.com/en-us/windows-server/administration/windows-commands/diskpart'>diskpart</a>**
 - The only exception to not using external libraries is the <a href='https://pypi.org/project/pywin32/'>**_pywin32_**</a>
   library, which is used for device handling on **Windows**. Other platforms do not need this library.
+
+## Installation
+As of this moment, **pyrite** is not yet available on PyPI. You can install it in three seperate ways:
+- Install the wheel file from the <a href='https://github.com/pyrite-project/pyrite/releases'>**_Releases_**</a> page.
+```bash
+pip install pyrite-0.1.0-py3-none-any.whl
+```
+- Clone the repository and install it using `poetry install`.
+- Build the project from source.
+
+### Build from Source
+- This project uses <a href='https://python-poetry.org/'>**_Poetry_**</a> as its build system.
+- To compile the project, run:
+```bash
+poetry install
+poetry build
+```
+- This will create a `dist` folder with the compiled project. From there, you can install it using pip:
+```bash
+pip install dist/pyrite-0.1.0-py3-none-any.whl
+```
